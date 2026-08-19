@@ -12,6 +12,48 @@ An email scheduling service built for a ReachInbox-style take-home. The API stor
 
 Run `npm run reconcile` before each worker deployment/startup. A production process manager should execute that command and only then start the worker.
 
+## Ethereal Email setup
+
+1. Create a test account at [ethereal.email](https://ethereal.email).
+2. Copy the SMTP username and password from the account page into `apps/api/.env`.
+3. Use the following SMTP settings:
+
+```env
+SMTP_HOST=smtp.ethereal.email
+SMTP_PORT=587
+SMTP_USER=your-ethereal-user
+SMTP_PASS=your-ethereal-password
+```
+
+Ethereal captures messages for preview; it does not deliver them to real recipient inboxes. Open the Ethereal Messages page to inspect successfully sent messages.
+
+## Implemented features
+
+### Backend
+
+- Express TypeScript API with `/health`, bulk scheduling, and email listing endpoints.
+- PostgreSQL persistence through Prisma, with one durable `EmailJob` row per recipient.
+- BullMQ delayed scheduling with `jobId` equal to the PostgreSQL row ID for idempotency.
+- Configurable worker concurrency through `WORKER_CONCURRENCY`.
+- Per-sender minimum delay through `MIN_SEND_DELAY_MS`.
+- Per-sender hourly limit through `MAX_EMAILS_PER_HOUR_PER_SENDER`.
+- Atomic Redis Lua rate-limit reservations safe across multiple workers.
+- Rate-limited jobs are delayed until the next eligible time and are never dropped.
+- Redis AOF persistence through Docker Compose.
+- Startup reconciliation command that restores missing queue jobs from scheduled database rows.
+- Nodemailer/Ethereal SMTP delivery with `SENT` and `FAILED` status tracking.
+
+### Frontend
+
+- Next.js and TypeScript application styled with Tailwind CSS.
+- Real Google OAuth login through NextAuth.
+- Header with authenticated user name, email, avatar, and logout.
+- Scheduled and Sent email views with loading and empty states.
+- Reference-style mailbox layout with sidebar navigation and email detail view.
+- Compose screen with sender, subject, body, start time, delay, and hourly limit controls.
+- CSV upload or pasted recipient list with live valid-address counting and deduplication.
+- API integration for creating campaigns and refreshing job status.
+
 ## Architecture and guarantees
 
 ![alt text](image.png)
