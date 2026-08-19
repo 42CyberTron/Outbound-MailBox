@@ -14,6 +14,8 @@ Run `npm run reconcile` before each worker deployment/startup. A production proc
 
 ## Architecture and guarantees
 
+![alt text](image.png)
+
 `Next.js dashboard → Express API → PostgreSQL (source of truth) → BullMQ delayed job → worker → Ethereal SMTP`.
 
 - A job is first persisted in Postgres, then queued with `jobId` exactly equal to the database row ID. BullMQ's uniqueness check makes repeated enqueue calls idempotent.
@@ -25,12 +27,9 @@ Run `npm run reconcile` before each worker deployment/startup. A production proc
 
 The database state transition prevents duplicate *queue processing*. No SMTP protocol can provide true exactly-once delivery around a process crash after an SMTP server accepts mail but before the database acknowledgement is committed. Production systems address that edge with a provider-side idempotency key/delivery API or an outbox provider. This implementation records each SMTP attempt and uses persistent queue/database recovery for all other restart paths.
 
-## Five-minute demo outline
+## Demo video
 
-1. Show `docker compose ps`, the three app processes, and the Google login.
-2. Compose a CSV with 3 addresses, set a start time one minute ahead, a 10-second delay, and hourly limit 2. Point out the live address count and Scheduled tab rows.
-3. Show Redis/BullMQ delayed jobs and PostgreSQL rows; wait for sends, then show Sent tab and Ethereal message previews.
-4. Schedule another email a few minutes out. Stop Redis/worker, restart `docker compose`, run `npm run reconcile`, then restart the worker. Show it sends once and only one Sent row exists.
+The demo video with the explanation of project and the architecutre in a small 5 min. loom video: https://www.loom.com/share/ae2d02728ec94ff7b5ada8780939f64b.
 
 ## Production deployment notes
 
