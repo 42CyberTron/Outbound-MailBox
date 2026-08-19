@@ -1,4 +1,4 @@
-# Reach Scheduler
+# Mail Scheduler
 
 An email scheduling service built for a ReachInbox-style take-home. The API stores each send as a PostgreSQL row; BullMQ is the durable scheduling/dispatch layer. The dashboard uses real Google OAuth via NextAuth.
 
