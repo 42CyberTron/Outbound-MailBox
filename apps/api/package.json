@@ -1,0 +1,10 @@
+{
+  "name": "@reach/api", "private": true, "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts", "worker": "tsx src/worker.ts", "reconcile": "tsx src/reconcile.ts",
+    "build": "tsc", "prisma:generate": "prisma generate", "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {"@prisma/client":"^6.0.0","bullmq":"^5.30.0","cors":"^2.8.5","dotenv":"^16.4.5","express":"^4.21.1","ioredis":"^5.4.1","nodemailer":"^6.9.16","zod":"^3.23.8"},
+  "devDependencies": {"@types/cors":"^2.8.17","@types/express":"^5.0.0","@types/nodemailer":"^6.4.16","prisma":"^6.0.0","tsx":"^4.19.2","typescript":"^5.7.2"}
+}
+

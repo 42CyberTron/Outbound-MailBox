@@ -1,0 +1,7 @@
+import { DelayedError, Worker } from 'bullmq'; import nodemailer from 'nodemailer'; import { prisma } from './db.js'; import { connection } from './queue.js'; import { reserveSender } from './rateLimit.js'; import { config } from './config.js';
+const transporter=nodemailer.createTransport(config.smtp); const minDelay=Number(process.env.MIN_SEND_DELAY_MS??1000); const senderHourlyLimit=Number(process.env.MAX_EMAILS_PER_HOUR_PER_SENDER??100);
+new Worker('email-send',async job=>{const row=await prisma.emailJob.findUnique({where:{id:job.data.id}}); if(!row||row.status==='SENT'||row.status==='FAILED') return; const eligible=await reserveSender(row.sender,senderHourlyLimit,minDelay); if(eligible>Date.now()+20){ await prisma.emailJob.update({where:{id:row.id},data:{scheduledAt:new Date(eligible)}}); await job.moveToDelayed(eligible, job.token); throw new DelayedError(); }
+ const claimed=await prisma.emailJob.updateMany({where:{id:row.id,status:'SCHEDULED'},data:{status:'SENDING',attempts:{increment:1}}}); if(!claimed.count) return;
+ try { await transporter.sendMail({from:row.sender,to:row.recipient,subject:row.subject,text:row.body}); await prisma.emailJob.update({where:{id:row.id},data:{status:'SENT',sentAt:new Date(),error:null}}); }
+ catch(e:any){await prisma.emailJob.update({where:{id:row.id},data:{status:'FAILED',error:e.message}}); throw e;}
+},{connection,concurrency:config.concurrency}); console.log(`Worker running (concurrency ${config.concurrency})`);

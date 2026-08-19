@@ -1,0 +1,13 @@
+{
+  "name": "reach-scheduler",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev:api": "npm --workspace @reach/api run dev",
+    "dev:web": "npm --workspace @reach/web run dev",
+    "worker": "npm --workspace @reach/api run worker",
+    "reconcile": "npm --workspace @reach/api run reconcile",
+    "build": "npm run build --workspaces"
+  }
+}
+

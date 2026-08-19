@@ -1,0 +1,2 @@
+@tailwind base; @tailwind components; @tailwind utilities;
+body{@apply bg-slate-50 text-slate-900} button{@apply transition disabled:opacity-50} input,textarea{@apply w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500} 

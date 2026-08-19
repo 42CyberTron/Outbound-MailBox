@@ -1,0 +1,10 @@
+import express from 'express'; import cors from 'cors'; import { z } from 'zod'; import { prisma } from './db.js'; import { enqueue } from './queue.js'; import { config } from './config.js';
+const app=express(); app.use(cors()); app.use(express.json({limit:'2mb'}));
+const compose=z.object({ownerEmail:z.string().email(),sender:z.string().email(),subject:z.string().min(1),body:z.string().min(1),recipients:z.array(z.string().email()).min(1),startAt:z.coerce.date(),delaySeconds:z.number().int().min(0),hourlyLimit:z.number().int().min(1)});
+app.get('/health',(_,res)=>res.json({ok:true}));
+app.get('/emails',async(req,res)=>{const owner=String(req.query.ownerEmail||''); const status=req.query.status?.toString(); const statusFilter=status==='SENT'?{status:{in:['SENT','FAILED'] as any}}:status?{status:status as any}:{}; res.json(await prisma.emailJob.findMany({where:{ownerEmail:owner,...statusFilter},orderBy:{scheduledAt:'asc'}}));});
+app.post('/emails/bulk',async(req,res)=>{const data=compose.parse(req.body); const perHour=Math.max(1,data.hourlyLimit); const interval=Math.max(data.delaySeconds*1000,Math.ceil(3600000/perHour)); const base=data.startAt.getTime();
+ const jobs=await prisma.$transaction(data.recipients.map((recipient,i)=>prisma.emailJob.create({data:{ownerEmail:data.ownerEmail,sender:data.sender,recipient,subject:data.subject,body:data.body,hourlyLimit:data.hourlyLimit,scheduledAt:new Date(base+i*interval)}})));
+ await Promise.all(jobs.map((j:{id:string;scheduledAt:Date})=>enqueue(j.id,j.scheduledAt))); res.status(201).json({count:jobs.length,jobs}); });
+app.use((err:any,_req:any,res:any,_next:any)=>res.status(err?.name==='ZodError'?400:500).json({error:err.message??'Unexpected error'}));
+app.listen(config.port,()=>console.log(`API on :${config.port}`));
