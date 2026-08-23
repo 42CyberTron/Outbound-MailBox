@@ -4,7 +4,7 @@ An email scheduling service built for a ReachInbox-style take-home. The API stor
 
 ## Quick start
 
-1. Copy `.env.example` to `.env`, then set Google OAuth credentials and Ethereal SMTP credentials. Add `http://localhost:3000/api/auth/callback/google` as the Google callback URL.
+1. Copy `.env.example` to `.env`, then set the Google OAuth credentials and the security secrets below. Add `http://localhost:3000/api/auth/callback/google` as the Google callback URL and enable the Gmail API in the same Google Cloud project.
 2. Start infrastructure: `docker compose up -d`.
 3. Install packages: `npm install`.
 4. Generate/migrate the database: `npm --workspace @reach/api run prisma:generate` then `npm --workspace @reach/api run prisma:migrate`.
@@ -12,20 +12,33 @@ An email scheduling service built for a ReachInbox-style take-home. The API stor
 
 Run `npm run reconcile` before each worker deployment/startup. A production process manager should execute that command and only then start the worker.
 
-## Ethereal Email setup
+## Gmail connection setup
 
-1. Create a test account at [ethereal.email](https://ethereal.email).
-2. Copy the SMTP username and password from the account page into `apps/api/.env`.
-3. Use the following SMTP settings:
+Each user connects their own Gmail account through Google OAuth. The app requests only the `gmail.send` scope, stores the resulting refresh token encrypted with AES-256-GCM, and uses it only in the background worker at the scheduled time. It never requests or stores a Gmail password or App Password.
 
-```env
-SMTP_HOST=smtp.ethereal.email
-SMTP_PORT=587
-SMTP_USER=your-ethereal-user
-SMTP_PASS=your-ethereal-password
+Generate the three application secrets before first run:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-Ethereal captures messages for preview; it does not deliver them to real recipient inboxes. Open the Ethereal Messages page to inspect successfully sent messages.
+- `TOKEN_ENCRYPTION_KEY` must be a base64-encoded 32-byte value from that command. It encrypts Gmail refresh tokens at rest.
+- `API_AUTH_SECRET` and `INTERNAL_API_SECRET` must be different random values of at least 32 characters. The first signs browser-to-API requests; the second protects the server-to-server OAuth callback.
+
+For local development, add the Next.js variables to `apps/web/.env.local`:
+
+```env
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-nextauth-secret
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+API_AUTH_SECRET=the-same-api-auth-secret-as-the-api
+INTERNAL_API_URL=http://localhost:4000
+INTERNAL_API_SECRET=the-same-internal-api-secret-as-the-api
+NEXT_PUBLIC_API_URL=http://localhost:4000
+```
+
+Keep `DATABASE_URL`, `REDIS_URL`, the Google OAuth credentials, `API_AUTH_SECRET`, `INTERNAL_API_SECRET`, `TOKEN_ENCRYPTION_KEY`, and `WEB_ORIGIN=http://localhost:3000` in the API/worker environment. Never commit either environment file.
 
 ## Implemented features
 
@@ -41,7 +54,7 @@ Ethereal captures messages for preview; it does not deliver them to real recipie
 - Rate-limited jobs are delayed until the next eligible time and are never dropped.
 - Redis AOF persistence through Docker Compose.
 - Startup reconciliation command that restores missing queue jobs from scheduled database rows.
-- Nodemailer/Ethereal SMTP delivery with `SENT` and `FAILED` status tracking.
+- Per-user Gmail API delivery with encrypted refresh-token storage and `SENT`/`FAILED` status tracking.
 
 ### Frontend
 
@@ -58,7 +71,7 @@ Ethereal captures messages for preview; it does not deliver them to real recipie
 
 ![alt text](image.png)
 
-`Next.js dashboard → Express API → PostgreSQL (source of truth) → BullMQ delayed job → worker → Ethereal SMTP`.
+`Next.js dashboard → Express API → PostgreSQL (source of truth) → BullMQ delayed job → worker → Gmail API`.
 
 - A job is first persisted in Postgres, then queued with `jobId` exactly equal to the database row ID. BullMQ's uniqueness check makes repeated enqueue calls idempotent.
 - CSV recipients are normalized/deduplicated client-side and persisted in one transaction. The API derives a spacing interval of `max(user delay, 1 hour / hourly limit)`, so campaigns are staggered and initially avoid hourly overflow.
@@ -67,7 +80,7 @@ Ethereal captures messages for preview; it does not deliver them to real recipie
 
 ### Delivery caveat
 
-The database state transition prevents duplicate *queue processing*. No SMTP protocol can provide true exactly-once delivery around a process crash after an SMTP server accepts mail but before the database acknowledgement is committed. Production systems address that edge with a provider-side idempotency key/delivery API or an outbox provider. This implementation records each SMTP attempt and uses persistent queue/database recovery for all other restart paths.
+The database state transition prevents duplicate *queue processing*. A process crash after Gmail accepts a message but before the database acknowledgement is committed can still result in an uncertain outcome. Production systems address that edge with a provider-side idempotency key or an outbox provider. This implementation records each delivery attempt and uses persistent queue/database recovery for all other restart paths.
 
 ## Demo video
 
@@ -75,4 +88,4 @@ The demo video with the explanation of project and the architecutre in a small 5
 
 ## Production deployment notes
 
-Use managed PostgreSQL and Redis with AOF/replication, run reconciliation as a release/startup hook, set the sender limit and `MIN_SEND_DELAY_MS` to provider policy, and expose the API behind authenticated server-side access rather than relying on the owner-email query parameter used by this take-home dashboard.
+Use managed PostgreSQL and Redis with AOF/replication, run reconciliation as a release/startup hook, set the sender limit and `MIN_SEND_DELAY_MS` to provider policy, configure `WEB_ORIGIN` to the exact dashboard URL, and keep all token-encryption and API-authentication secrets in your host's secret manager.

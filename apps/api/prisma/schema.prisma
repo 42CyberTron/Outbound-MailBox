@@ -32,3 +32,12 @@ model EmailJob {
   @@index([status, scheduledAt])
   @@index([sender, scheduledAt])
 }
+
+model GmailMailbox {
+  ownerEmail            String   @id
+  gmailAddress          String   @unique
+  encryptedRefreshToken String   @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  revokedAt             DateTime?
+}
