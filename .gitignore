@@ -2,5 +2,5 @@ node_modules
 .next
 dist
 .env
+.env.local
 *.log
-
