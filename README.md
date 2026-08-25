@@ -82,10 +82,6 @@ Keep `DATABASE_URL`, `REDIS_URL`, the Google OAuth credentials, `API_AUTH_SECRET
 
 The database state transition prevents duplicate *queue processing*. A process crash after Gmail accepts a message but before the database acknowledgement is committed can still result in an uncertain outcome. Production systems address that edge with a provider-side idempotency key or an outbox provider. This implementation records each delivery attempt and uses persistent queue/database recovery for all other restart paths.
 
-## Demo video
-
-The demo video with the explanation of project and the architecutre in a small 5 min. loom video: https://www.loom.com/share/ae2d02728ec94ff7b5ada8780939f64b.
-
 ## Production deployment notes
 
 Use managed PostgreSQL and Redis with AOF/replication, run reconciliation as a release/startup hook, set the sender limit and `MIN_SEND_DELAY_MS` to provider policy, configure `WEB_ORIGIN` to the exact dashboard URL, and keep all token-encryption and API-authentication secrets in your host's secret manager.
