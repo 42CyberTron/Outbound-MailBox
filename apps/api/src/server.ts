@@ -3,7 +3,7 @@ import cors from 'cors';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { prisma } from './db.js';
-import { enqueue } from './queue.js';
+import { enqueue, removeQueuedEmail } from './queue.js';
 import { config } from './config.js';
 import { requireInternal, requireUser } from './auth.js';
 import { encrypt } from './crypto.js';
@@ -63,6 +63,17 @@ app.get('/emails', asyncRoute(async (req, res) => {
   const status = req.query.status?.toString();
   const statusFilter: Prisma.EmailJobWhereInput = status === 'SENT' ? { status: { in: ['SENT', 'FAILED'] } } : status && ['SCHEDULED', 'SENDING', 'FAILED'].includes(status) ? { status: status as 'SCHEDULED' | 'SENDING' | 'FAILED' } : {};
   res.json(await prisma.emailJob.findMany({ where: { ownerEmail: res.locals.ownerEmail, ...statusFilter }, orderBy: { scheduledAt: 'asc' } }));
+}));
+
+// Cancelling removes the database row first. A worker that already loaded the job
+// then fails its conditional SCHEDULED -> SENDING claim and cannot send the email.
+app.delete('/emails/:id', asyncRoute(async (req, res) => {
+  const ownerEmail = res.locals.ownerEmail as string;
+  const id = z.string().cuid().parse(req.params.id);
+  const deleted = await prisma.emailJob.deleteMany({ where: { id, ownerEmail, status: 'SCHEDULED' } });
+  if (!deleted.count) return res.status(409).json({ error: 'Only emails that are still scheduled can be cancelled' });
+  await removeQueuedEmail(id);
+  res.status(204).end();
 }));
 
 app.post('/emails/bulk', asyncRoute(async (req, res) => {
